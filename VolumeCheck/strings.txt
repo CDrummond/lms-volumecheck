@@ -1,0 +1,18 @@
+PLUGIN_VOLUMECHECK
+	EN	Volume Check
+
+PLUGIN_VOLUMECHECK_DESC
+	EN	Prevent volume jumping from <=75% to >=95%
+
+PLUGIN_VOLUMECHECK_ENABLE
+	EN	Enable volume checking
+
+PLUGIN_VOLUMECHECK_ENABLE_DESC
+	EN	Prevent volume jumping from <=75% to >=95%
+	
+PLUGIN_VOLUMECHECK_DISABLING
+	EN	Disabling volume checking
+
+PLUGIN_VOLUMECHECK_DISABLING
+	EN	Enabling volume checking
+

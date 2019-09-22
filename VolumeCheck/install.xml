@@ -1,0 +1,16 @@
+<?xml version='1.0' standalone='yes'?>
+<extension>
+  <name>PLUGIN_VOLUMECHECK</name>
+  <creator>Craig Drummond</creator>
+  <defaultState>enabled</defaultState>
+  <description>PLUGIN_VOLUMECHECK_DESC</description>
+  <id>8c7766b3-ba21-4c16-9b14-0f9e21a21bfe</id>
+  <module>Plugins::VolumeCheck::Plugin</module>
+  <targetApplication>
+    <minVersion>7.9.0</minVersion>
+    <maxVersion>*</maxVersion>
+    <id>SlimServer</id>
+  </targetApplication>
+  <type>2</type>
+  <version>0.0.1</version>
+</extension>

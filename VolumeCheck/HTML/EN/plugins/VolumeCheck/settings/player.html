@@ -1,0 +1,5 @@
+[% PROCESS settings/header.html %]
+	[% WRAPPER setting title="PLUGIN_VOLUMECHECK_ENABLE" desc="PLUGIN_VOLUMECHECK_ENABLE_DESC" %]
+	    <input type="checkbox" [% IF prefs.pref_enabled %]checked [% END %] class="stdedit" name="pref_enabled" value="1"/>
+	[% END %]
+[% PROCESS settings/footer.html %]
