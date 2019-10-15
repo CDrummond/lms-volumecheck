@@ -2,13 +2,13 @@ PLUGIN_VOLUMECHECK
 	EN	Volume Check
 
 PLUGIN_VOLUMECHECK_DESC
-	EN	Prevent volume jumping from <=75% to >=95%
+	EN	Prevent volume jumping from <= 75% to >= 95%. Prevent volume changes for first few when playing a track (if it has been more than 25 minutes since last play).
 
 PLUGIN_VOLUMECHECK_ENABLE
 	EN	Enable volume checking
 
 PLUGIN_VOLUMECHECK_ENABLE_DESC
-	EN	Prevent volume jumping from <=75% to >=95%
+	EN	Prevent volume jumping from <= 75% to >= 95%. Prevent volume changes for first few seconds when playing a track (if it has been more than 25 minutes since last play).
 	
 PLUGIN_VOLUMECHECK_DISABLING
 	EN	Disabling volume checking
