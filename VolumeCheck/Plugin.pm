@@ -14,6 +14,9 @@ use Plugins::VolumeCheck::PlayerSettings;
 my $CHECK_PERIOD = 8;
 my $CHECK_INTERVAL = 0.5;
 my $VOLUME_CHECK_TIME = 25*60;
+my $VOLUME_MAX_HISTORY = 24*60*60;
+my $HIGH_VOLUME = 95;
+my $DEF_VOLUME = 30;
 
 my $log = Slim::Utils::Log->addLogCategory({
     'category' => 'plugin.volumecheck',
@@ -41,6 +44,7 @@ my $callbackSet = 0;
 my $originalMixerVolumeCommand;
 my $originalPlayCommand;
 my $originalPauseCommand;
+my $originalPlayistcontrolCommand;
 my $pluginEnabled = 0;
 my %playerVolumes;
 
@@ -53,6 +57,7 @@ sub initPlugin {
         $originalMixerVolumeCommand = Slim::Control::Request::addDispatch(['mixer', 'volume', '_newvalue'],[1, 0, 1, \&VolumeCheck_mixerVolumeCommand]);
         $originalPlayCommand = Slim::Control::Request::addDispatch(['play', '_fadeIn'], [1, 0, 1, \&VolumeCheck_playCommand]);
         $originalPauseCommand = Slim::Control::Request::addDispatch(['pause'], [1, 0, 0, \&VolumeCheck_pauseCommand]);
+        $originalPlayistcontrolCommand = Slim::Control::Request::addDispatch(['playlistcontrol'], [1, 0, 1, \&VolumeCheck_playlistcontrolCommand]);
         $callbackSet = 1;
     }
     $pluginEnabled = 1;
@@ -69,11 +74,15 @@ sub VolumeCheck_mixerVolumeCommand {
         my $request = $args[0];
         my $client = $request->client();
         my $newvalue = $request->getParam('_newvalue');
-        $log->debug("Volme request " . $newvalue);
-        if ($newvalue>=95) {
+        $log->debug("Volume request " . $newvalue);
+        if ($newvalue>=$HIGH_VOLUME) {
+            if (exists($playerVolumes{$client->id}) && ($playerVolumes{$client->id}{'level'}<$HIGH_VOLUME)) {
+                $client->execute(['mixer', 'volume', playerVolumes{$client->id}{'level'}]);
+                return;
+            }
             my $currentVolume = $serverPrefs->client($client)->get("volume");
             $log->debug("Volume request " . $currentVolume);
-            if ($currentVolume<=80) {
+            if ($currentVolume<=($HIGH_VOLUME-20)) {
                 $request->setStatusDone;
                 $log->debug("Volume request jump too large!");
                 $client->execute(['mixer', 'volume', $currentVolume]);
@@ -95,27 +104,29 @@ sub VolumeCheck_resetVolume {
     $client->execute(['mixer', 'volume', $currentVolume]);
 }
 
-sub VolumeCheck_playCommand {
-    $log->debug("VolumeCheck_playCommand running\n");
-    my @args = @_;
+sub VolumeCheck_startChecker {
     if ($pluginEnabled == 1) {
-        my $request = $args[0];
+        my $request = shift;
         my $client = $request->client();
         my $now = time();
 
-        # If more than 20 minutes since last play, ensure no volume changes...
+        # If more than 25 minutes since last play, ensure no volume changes...
         if (!exists($playerVolumes{$client->id}) || ($now-$playerVolumes{$client->id}{'time'}) > $VOLUME_CHECK_TIME) {
-            $log->debug("Start play checker for ". $client->id . "\n");
-            $playerVolumes{$client->id} = { 'time' => $now, 'level' => $serverPrefs->client($client)->get("volume") };
-            Slim::Utils::Timers::killTimers($client, \&VolumeCheck_checkVolumeOnPlay);
-            Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + $CHECK_INTERVAL, \&VolumeCheck_checkVolumeOnPlay);
+            $log->debug("Start volume checker for ". $client->id . "\n");
+            my $level = $serverPrefs->client($client)->get("volume");
+            if ($level >= $HIGH_VOLUME) {
+                $level = $DEF_VOLUME;
+            }
+            $playerVolumes{$client->id} = { 'time' => $now, 'level' => $level };
+            Slim::Utils::Timers::killTimers($client, \&VolumeCheck_setVolume);
+            Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + $CHECK_INTERVAL, \&VolumeCheck_setVolume);
         }
 
         # Clean up old history (to handle removed players, etc.)
         $log->debug("Tidy state hash\n");
         my @toClear = ();
         for my $id (keys %playerVolumes) {
-            if (($now - $playerVolumes{$id}{'time'}) > $VOLUME_CHECK_TIME) {
+            if (($now - $playerVolumes{$id}{'time'}) >= $VOLUME_MAX_HISTORY) {
                 push @toClear, $id;
             }
         }
@@ -124,44 +135,44 @@ sub VolumeCheck_playCommand {
             delete($playerVolumes{$id});
         }
     }
-
-    $log->debug("Calling original play function\n");
-    return &$originalPlayCommand(@args);
 }
 
-sub VolumeCheck_checkVolumeOnPlay {
+sub VolumeCheck_setVolume {
     my $client = shift;
     my $now = time();
     my $time = $playerVolumes{$client->id}{'time'};
 
     if ( ($now - $time) <= $CHECK_PERIOD) {
-        $log->debug("VolumeCheck_playCommand setting volume of " . $client->id . " to " . $playerVolumes{$client->id}{'level'} . "\n");
+        $log->debug("VolumeCheck_setVolume setting volume of " . $client->id . " to " . $playerVolumes{$client->id}{'level'} . "\n");
         $client->execute(['mixer', 'volume', $playerVolumes{$client->id}{'level'}]);
-        Slim::Utils::Timers::killTimers($client, \&VolumeCheck_checkVolumeOnPlay);
-        Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + $CHECK_INTERVAL, \&VolumeCheck_checkVolumeOnPlay);
+        Slim::Utils::Timers::killTimers($client, \&VolumeCheck_setVolume);
+        Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + $CHECK_INTERVAL, \&VolumeCheck_setVolume);
     }
+}
+
+sub VolumeCheck_playCommand {
+    $log->debug("VolumeCheck_playCommand running\n");
+    my @args = @_;
+    VolumeCheck_startChecker($args[0]);
+    $log->debug("Calling original play function\n");
+    return &$originalPlayCommand(@args);
 }
 
 sub VolumeCheck_pauseCommand {
     $log->debug("VolumeCheck_pauseCommand running\n");
     my @args = @_;
-    if ($pluginEnabled == 1) {
-        my $request = $args[0];
-        my $client = $request->client();
-        my $now = time();
-
-        # If more than 20 minutes since last play, ensure no volume changes...
-        if (exists($playerVolumes{$client->id}) ) {
-            $log->debug("Reset play checker for ". $client->id . "\n");
-            $playerVolumes{$client->id}{'time'} = $now;
-            Slim::Utils::Timers::killTimers($client, \&VolumeCheck_checkVolumeOnPlay);
-        }
-    }
-
+    VolumeCheck_startChecker($args[0]);
     $log->debug("Calling original pause function\n");
     return &$originalPauseCommand(@args);
 }
 
+sub VolumeCheck_playlistcontrolCommand {
+    $log->debug("VolumeCheck_playlistcontrolCommand running\n");
+    my @args = @_;
+    VolumeCheck_startChecker($args[0]);
+    $log->debug("Calling original playlistcontrol function\n");
+    return &$originalPlayistcontrolCommand(@args);
+}
 
 sub lines {
     my $client = shift;
