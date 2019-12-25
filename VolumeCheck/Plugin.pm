@@ -45,6 +45,7 @@ my $originalMixerVolumeCommand;
 my $originalPlayCommand;
 my $originalPauseCommand;
 my $originalPlayistcontrolCommand;
+my $originalPowerCommand;
 my $pluginEnabled = 0;
 my %playerVolumes;
 
@@ -58,6 +59,7 @@ sub initPlugin {
         $originalPlayCommand = Slim::Control::Request::addDispatch(['play', '_fadeIn'], [1, 0, 1, \&VolumeCheck_playCommand]);
         $originalPauseCommand = Slim::Control::Request::addDispatch(['pause'], [1, 0, 0, \&VolumeCheck_pauseCommand]);
         $originalPlayistcontrolCommand = Slim::Control::Request::addDispatch(['playlistcontrol'], [1, 0, 1, \&VolumeCheck_playlistcontrolCommand]);
+        $originalPowerCommand = Slim::Control::Request::addDispatch(['power', '_newvalue', '_noplay'], [1, 0, 1, \&VolumeCheck_powerCommand]);
         $callbackSet = 1;
     }
     $pluginEnabled = 1;
@@ -172,6 +174,24 @@ sub VolumeCheck_playlistcontrolCommand {
     VolumeCheck_startChecker($args[0]);
     $log->debug("Calling original playlistcontrol function\n");
     return &$originalPlayistcontrolCommand(@args);
+}
+
+sub VolumeCheck_powerCommand {
+    $log->debug("VolumeCheck_powerCommand running\n");
+    my @args = @_;
+    my $request = $args[0];
+    my $client   = $request->client();
+    my $newpower = $request->getParam('_newvalue');
+    if (!defined $newpower) {
+        $newpower = $client->power() ? 0 : 1;
+    }
+
+    if ($newpower != $client->power() && 1==$newpower) {
+        VolumeCheck_startChecker($args[0]);
+    }
+
+    $log->debug("Calling original power function\n");
+    return &$originalPowerCommand(@args);
 }
 
 sub lines {
