@@ -79,7 +79,7 @@ sub VolumeCheck_mixerVolumeCommand {
         $log->debug("Volume request " . $newvalue);
         if ($newvalue>=$HIGH_VOLUME) {
             if (exists($playerVolumes{$client->id}) && ($playerVolumes{$client->id}{'level'}<$HIGH_VOLUME)) {
-                $client->execute(['mixer', 'volume', playerVolumes{$client->id}{'level'}]);
+                $client->execute(['mixer', 'volume', $playerVolumes{$client->id}{'level'}]);
                 return;
             }
             my $currentVolume = $serverPrefs->client($client)->get("volume");
