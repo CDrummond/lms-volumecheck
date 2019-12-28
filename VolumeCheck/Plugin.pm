@@ -70,23 +70,21 @@ sub shutdownPlugin {
 }
 
 sub VolumeCheck_mixerVolumeCommand {
-    $log->debug("VolumeCheck_mixerVolumeCommand running\n");
     my @args = @_;
     if ($pluginEnabled == 1) {
         my $request = $args[0];
         my $client = $request->client();
         my $newvalue = $request->getParam('_newvalue');
-        $log->debug("Volume request " . $newvalue);
+        $log->debug("[" . $client->id . "] " . $newvalue);
         if ($newvalue>=$HIGH_VOLUME) {
             if (exists($playerVolumes{$client->id}) && ($playerVolumes{$client->id}{'level'}<$HIGH_VOLUME)) {
                 $client->execute(['mixer', 'volume', $playerVolumes{$client->id}{'level'}]);
                 return;
             }
             my $currentVolume = $serverPrefs->client($client)->get("volume");
-            $log->debug("Volume request " . $currentVolume);
             if ($currentVolume<=($HIGH_VOLUME-20)) {
                 $request->setStatusDone;
-                $log->debug("Volume request jump too large!");
+                $log->debug("[" . $client->id . "] Resetting to: " . $currentVolume);
                 $client->execute(['mixer', 'volume', $currentVolume]);
                 Slim::Utils::Timers::killTimers($client, \&VolumeCheck_resetVolume);
                 Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 0.05, \&VolumeCheck_resetVolume);
@@ -95,37 +93,36 @@ sub VolumeCheck_mixerVolumeCommand {
         }
     }
 
-    $log->debug("Calling original mixer function\n");
     return &$originalMixerVolumeCommand(@args);
 }
 
 sub VolumeCheck_resetVolume {
     my $client = shift;
     my $currentVolume = $serverPrefs->client($client)->get("volume");
-    $log->debug("Volume resetting to " . $currentVolume);
+    $log->debug("[" . $client->id . "] " . $currentVolume);
     $client->execute(['mixer', 'volume', $currentVolume]);
 }
 
 sub VolumeCheck_startChecker {
     if ($pluginEnabled == 1) {
         my $request = shift;
+        my $command = shift;
         my $client = $request->client();
         my $now = time();
 
-        # If more than 25 minutes since last play, ensure no volume changes...
-        if (!exists($playerVolumes{$client->id}) || ($now-$playerVolumes{$client->id}{'time'}) > $VOLUME_CHECK_TIME) {
-            $log->debug("Start volume checker for ". $client->id . "\n");
+        $log->debug("[" . $client->id . "] " . $command);
+        # If more than 25 minutes since last power/play/playlistcontrol, ensure no volume changes...
+        if (!exists($playerVolumes{$client->id}) || $command eq "power" || ($now-$playerVolumes{$client->id}{'time'}) >= $VOLUME_CHECK_TIME || ($now-$playerVolumes{$client->id}{'time'}) <= 2) {
             my $level = $serverPrefs->client($client)->get("volume");
             if ($level >= $HIGH_VOLUME) {
                 $level = $DEF_VOLUME;
             }
+            $log->debug("[" . $client->id . "] Start volume checker, level: " . $level);
             $playerVolumes{$client->id} = { 'time' => $now, 'level' => $level };
-            Slim::Utils::Timers::killTimers($client, \&VolumeCheck_setVolume);
-            Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + $CHECK_INTERVAL, \&VolumeCheck_setVolume);
+            VolumeCheck_setVolume($client);
         }
 
         # Clean up old history (to handle removed players, etc.)
-        $log->debug("Tidy state hash\n");
         my @toClear = ();
         for my $id (keys %playerVolumes) {
             if (($now - $playerVolumes{$id}{'time'}) >= $VOLUME_MAX_HISTORY) {
@@ -133,7 +130,7 @@ sub VolumeCheck_startChecker {
             }
         }
         foreach my $id (@toClear) {
-            $log->debug("Remove state for ". $id . "\n");
+            $log->debug("Remove state for ". $id);
             delete($playerVolumes{$id});
         }
     }
@@ -145,7 +142,7 @@ sub VolumeCheck_setVolume {
     my $time = $playerVolumes{$client->id}{'time'};
 
     if ( ($now - $time) <= $CHECK_PERIOD) {
-        $log->debug("VolumeCheck_setVolume setting volume of " . $client->id . " to " . $playerVolumes{$client->id}{'level'} . "\n");
+        $log->debug("[" . $client->id . "] " . $playerVolumes{$client->id}{'level'});
         $client->execute(['mixer', 'volume', $playerVolumes{$client->id}{'level'}]);
         Slim::Utils::Timers::killTimers($client, \&VolumeCheck_setVolume);
         Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + $CHECK_INTERVAL, \&VolumeCheck_setVolume);
@@ -153,31 +150,24 @@ sub VolumeCheck_setVolume {
 }
 
 sub VolumeCheck_playCommand {
-    $log->debug("VolumeCheck_playCommand running\n");
     my @args = @_;
-    VolumeCheck_startChecker($args[0]);
-    $log->debug("Calling original play function\n");
+    VolumeCheck_startChecker($args[0], "play");
     return &$originalPlayCommand(@args);
 }
 
 sub VolumeCheck_pauseCommand {
-    $log->debug("VolumeCheck_pauseCommand running\n");
     my @args = @_;
-    VolumeCheck_startChecker($args[0]);
-    $log->debug("Calling original pause function\n");
+    VolumeCheck_startChecker($args[0], "pause");
     return &$originalPauseCommand(@args);
 }
 
 sub VolumeCheck_playlistcontrolCommand {
-    $log->debug("VolumeCheck_playlistcontrolCommand running\n");
     my @args = @_;
-    VolumeCheck_startChecker($args[0]);
-    $log->debug("Calling original playlistcontrol function\n");
+    VolumeCheck_startChecker($args[0], "playlistcontrol");
     return &$originalPlayistcontrolCommand(@args);
 }
 
 sub VolumeCheck_powerCommand {
-    $log->debug("VolumeCheck_powerCommand running\n");
     my @args = @_;
     my $request = $args[0];
     my $client   = $request->client();
@@ -187,10 +177,9 @@ sub VolumeCheck_powerCommand {
     }
 
     if ($newpower != $client->power() && 1==$newpower) {
-        VolumeCheck_startChecker($args[0]);
+        VolumeCheck_startChecker($args[0], "power");
     }
 
-    $log->debug("Calling original power function\n");
     return &$originalPowerCommand(@args);
 }
 
@@ -249,7 +238,7 @@ sub setDefaults {
     my $client = shift;
     my $force = shift;
     my $clientPrefs = $prefs->client($client);
-    $log->debug("Checking defaults for " . $client->name() . " Forcing: " . $force);
+    $log->debug("[" . $client->id . "] Checking defaults for " . $client->name() . " Forcing: " . $force);
     foreach my $key (keys %defaults) {
         if (!defined($clientPrefs->get($key)) || $force) {
             $log->debug("Setting default value for $key: " . $defaults{$key});
