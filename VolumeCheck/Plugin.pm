@@ -74,22 +74,20 @@ sub VolumeCheck_mixerVolumeCommand {
     if ($pluginEnabled == 1) {
         my $request = $args[0];
         my $client = $request->client();
-        my $newvalue = $request->getParam('_newvalue');
-        $log->debug("[" . $client->id . "] " . $newvalue);
-        if ($newvalue>=$HIGH_VOLUME) {
-            if (exists($playerVolumes{$client->id}) && ($playerVolumes{$client->id}{'level'}<$HIGH_VOLUME)) {
-                $client->execute(['mixer', 'volume', $playerVolumes{$client->id}{'level'}]);
-                return;
-            }
-            my $currentVolume = $serverPrefs->client($client)->get("volume");
-            if ($currentVolume<=($HIGH_VOLUME-20)) {
-                $request->setStatusDone;
-                $log->debug("[" . $client->id . "] Resetting to: " . $currentVolume);
-                $client->execute(['mixer', 'volume', $currentVolume]);
-                Slim::Utils::Timers::killTimers($client, \&VolumeCheck_resetVolume);
-                Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 0.05, \&VolumeCheck_resetVolume);
-                return;
-            }
+        my $currentVolume = $serverPrefs->client($client)->get("volume");
+        my $newVolume = $request->getParam('_newvalue');
+        $log->debug("[" . $client->id . "] " . $currentVolume . " -> " . $newVolume);
+        if ($newVolume>=$HIGH_VOLUME && $currentVolume<=($HIGH_VOLUME-20)) {
+            $log->debug("[" . $client->id . "] Resetting to: " . $currentVolume);
+            $client->execute(['mixer', 'volume', $currentVolume]);
+            Slim::Utils::Timers::killTimers($client, \&VolumeCheck_resetVolume);
+            Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 0.05, \&VolumeCheck_resetVolume);
+            $request->setStatusDone;
+            return;
+        }
+
+        if (exists($playerVolumes{$client->id})) {
+            $playerVolumes{$client->id}{'level'} = $newVolume;
         }
     }
 
