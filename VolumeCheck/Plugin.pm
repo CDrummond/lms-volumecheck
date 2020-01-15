@@ -11,7 +11,7 @@ use Slim::Utils::Strings qw(string);
 
 use Plugins::VolumeCheck::PlayerSettings;
 
-my $CHECK_PERIOD = 8;
+my $CHECK_PERIOD = 15;
 my $CHECK_INTERVAL = 0.5;
 my $VOLUME_CHECK_TIME = 25*60;
 my $VOLUME_MAX_HISTORY = 24*60*60;
