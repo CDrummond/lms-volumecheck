@@ -76,7 +76,7 @@ sub VolumeCheck_mixerVolumeCommand {
         my $client = $request->client();
         my $currentVolume = $serverPrefs->client($client)->get("volume");
         my $newVolume = $request->getParam('_newvalue');
-        $log->debug("[" . $client->id . "] " . $currentVolume . " -> " . $newVolume);
+        #$log->debug("[" . $client->id . "] " . $currentVolume . " -> " . $newVolume);
         if ($newVolume>=$HIGH_VOLUME && $currentVolume<=($HIGH_VOLUME-20)) {
             $log->debug("[" . $client->id . "] Resetting to: " . $currentVolume);
             $client->execute(['mixer', 'volume', $currentVolume]);
