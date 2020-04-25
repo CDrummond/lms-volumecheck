@@ -74,20 +74,22 @@ sub VolumeCheck_mixerVolumeCommand {
     if ($pluginEnabled == 1) {
         my $request = $args[0];
         my $client = $request->client();
-        my $currentVolume = $serverPrefs->client($client)->get("volume");
-        my $newVolume = $request->getParam('_newvalue');
-        #$log->debug("[" . $client->id . "] " . $currentVolume . " -> " . $newVolume);
-        if ($newVolume>=$HIGH_VOLUME && $currentVolume<=($HIGH_VOLUME-20)) {
-            $log->debug("[" . $client->id . "] Resetting to: " . $currentVolume);
-            $client->execute(['mixer', 'volume', $currentVolume]);
-            Slim::Utils::Timers::killTimers($client, \&VolumeCheck_resetVolume);
-            Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 0.05, \&VolumeCheck_resetVolume);
-            $request->setStatusDone;
-            return;
-        }
+        if ($prefs->client($client)->get('enabled')) {
+            my $currentVolume = $serverPrefs->client($client)->get("volume");
+            my $newVolume = $request->getParam('_newvalue');
+            #$log->debug("[" . $client->id . "] " . $currentVolume . " -> " . $newVolume);
+            if ($newVolume>=$HIGH_VOLUME && $currentVolume<=($HIGH_VOLUME-20)) {
+                $log->debug("[" . $client->id . "] Resetting to: " . $currentVolume);
+                $client->execute(['mixer', 'volume', $currentVolume]);
+                Slim::Utils::Timers::killTimers($client, \&VolumeCheck_resetVolume);
+                Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 0.05, \&VolumeCheck_resetVolume);
+                $request->setStatusDone;
+                return;
+            }
 
-        if (exists($playerVolumes{$client->id})) {
-            $playerVolumes{$client->id}{'level'} = $newVolume;
+            if (exists($playerVolumes{$client->id})) {
+                $playerVolumes{$client->id}{'level'} = $newVolume;
+            }
         }
     }
 
@@ -106,6 +108,7 @@ sub VolumeCheck_startChecker {
         my $request = shift;
         my $command = shift;
         my $client = $request->client();
+        return unless $prefs->client($client)->get('enabled');
         my $now = time();
 
         $log->debug("[" . $client->id . "] " . $command);
@@ -169,13 +172,15 @@ sub VolumeCheck_powerCommand {
     my @args = @_;
     my $request = $args[0];
     my $client   = $request->client();
-    my $newpower = $request->getParam('_newvalue');
-    if (!defined $newpower) {
-        $newpower = $client->power() ? 0 : 1;
-    }
+    if ($prefs->client($client)->get('enabled')) {
+        my $newpower = $request->getParam('_newvalue');
+        if (!defined $newpower) {
+            $newpower = $client->power() ? 0 : 1;
+        }
 
-    if ($newpower != $client->power() && 1==$newpower) {
-        VolumeCheck_startChecker($args[0], "power");
+        if ($newpower != $client->power() && 1==$newpower) {
+            VolumeCheck_startChecker($args[0], "power");
+        }
     }
 
     return &$originalPowerCommand(@args);
