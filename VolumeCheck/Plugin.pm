@@ -3,7 +3,7 @@ package Plugins::VolumeCheck::Plugin;
 #
 # LMS-VolumeCheck
 #
-# Copyright (c) 2019-2020 Craig Drummond <craig.p.drummond@gmail.com>
+# Copyright (c) 2019-2021 Craig Drummond <craig.p.drummond@gmail.com>
 #
 # MIT license.
 #
@@ -152,7 +152,7 @@ sub VolumeCheck_setVolume {
 
     if ( ($now - $time) <= $CHECK_PERIOD) {
         $log->debug("[" . $client->id . "] " . $playerVolumes{$client->id}{'level'});
-        $client->execute(['mixer', 'volume', $playerVolumes{$client->id}{'level'}]);
+        $client->execute(['mixer', 'volume', $vol]);
         Slim::Utils::Timers::killTimers($client, \&VolumeCheck_setVolume);
         Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + $CHECK_INTERVAL, \&VolumeCheck_setVolume);
     }
